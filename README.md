@@ -4,6 +4,16 @@
 
 ---
 
+## 📸 Screenshots
+
+### System Overview & Dashboard
+![IProof Dashboard](github-img/iproof1.PNG)
+
+### System Info & Database Diagnostics
+![About IProof](github-img/iproof2.PNG)
+
+---
+
 ## 🚀 Key Features
 
 - **Subnet Management**: Full support for CIDR masks, VRFs, and Master Subnets (nested folder hierarchy).
@@ -63,9 +73,9 @@ To keep device statuses up-to-date automatically, add the following cron job ent
 
 ## 👨‍💻 Author & Credits
 
-- **Author**: SISTEM
-- **Email**: contact@example.com
-- **Website / Repository**: https://github.com/your-username/antigravity-ipam
+- **Author**: Faruk Güler
+- **Website**: [www.farukguler.com](https://www.farukguler.com)
+- **GitHub**: [github.com/faruk-guler](https://github.com/faruk-guler)
 
 ---
 
@@ -74,7 +84,7 @@ To keep device statuses up-to-date automatically, add the following cron job ent
 This project is licensed under the **Apache License 2.0**.
 
 ```text
-Copyright 2026 SISTEM
+Copyright 2026 Faruk Güler
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
