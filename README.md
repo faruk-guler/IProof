@@ -52,7 +52,7 @@ To keep device statuses up-to-date automatically, add the following cron job ent
 
 ```bash
 # Run host status scan every 5 minutes
-*/5 * * * * php /path/to/Antigravity/cron_scan.php >/dev/null 2>&1
+*/5 * * * * php /path/test/cron_scan.php >/dev/null 2>&1
 ```
 
 ---
