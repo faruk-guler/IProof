@@ -6,11 +6,21 @@ if ($action === 'login') {
     }
     
     $input = json_decode(file_get_contents('php://input'), true);
-    $username = trim($input['username'] ?? 'admin');
+    $username = strtolower(trim($input['username'] ?? 'admin'));
     $password = $input['password'] ?? '';
     
     if (empty($password)) {
         respond('error', 'Password cannot be empty');
+    }
+    
+    // Basic brute-force protection: track failed attempts in session
+    if (!isset($_SESSION['login_attempts'])) {
+        $_SESSION['login_attempts'] = 0;
+        $_SESSION['login_lockout_until'] = 0;
+    }
+    if (time() < $_SESSION['login_lockout_until']) {
+        $wait = $_SESSION['login_lockout_until'] - time();
+        respond('error', "Too many failed attempts. Try again in {$wait} seconds.");
     }
     
     $stmt = $db->query("SELECT admin_password, readonly_password FROM settings LIMIT 1");
@@ -22,6 +32,7 @@ if ($action === 'login') {
     
     if ($username === 'admin') {
         if (password_verify($password, $settings['admin_password'])) {
+            $_SESSION['login_attempts'] = 0;
             session_regenerate_id(true);
             $_SESSION['admin_logged_in'] = true;
             $_SESSION['user_role'] = 'admin';
@@ -33,11 +44,17 @@ if ($action === 'login') {
                 'username' => 'admin'
             ]);
         } else {
+            $_SESSION['login_attempts']++;
+            if ($_SESSION['login_attempts'] >= 5) {
+                $_SESSION['login_lockout_until'] = time() + 60; // 60s lockout
+                $_SESSION['login_attempts'] = 0;
+            }
             respond('error', 'Incorrect password');
         }
     } else if ($username === 'readonly') {
         $readonly_hash = $settings['readonly_password'] ?: password_hash('readonly', PASSWORD_DEFAULT);
         if (password_verify($password, $readonly_hash)) {
+            $_SESSION['login_attempts'] = 0;
             session_regenerate_id(true);
             $_SESSION['admin_logged_in'] = true;
             $_SESSION['user_role'] = 'readonly';
@@ -49,6 +66,11 @@ if ($action === 'login') {
                 'username' => 'readonly'
             ]);
         } else {
+            $_SESSION['login_attempts']++;
+            if ($_SESSION['login_attempts'] >= 5) {
+                $_SESSION['login_lockout_until'] = time() + 60;
+                $_SESSION['login_attempts'] = 0;
+            }
             respond('error', 'Incorrect password');
         }
     } else {
@@ -57,10 +79,13 @@ if ($action === 'login') {
 }
 
 if ($action === 'logout') {
+    session_regenerate_id(true);
     unset($_SESSION['admin_logged_in']);
     unset($_SESSION['user_role']);
     unset($_SESSION['username']);
     unset($_SESSION['csrf_token']);
+    unset($_SESSION['login_attempts']);
+    unset($_SESSION['login_lockout_until']);
     session_destroy();
     respond('success', 'Logged out');
 }

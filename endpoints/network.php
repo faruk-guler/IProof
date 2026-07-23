@@ -64,8 +64,14 @@ if ($action === 'scan_ip_ports') {
             $stmt->execute([$subnet_id, $ip, $open_ports, $now]);
         }
     } else {
-        $stmt = $db->prepare("UPDATE ip_addresses SET ports = ?, last_seen = ? WHERE ip = ?");
-        $stmt->execute([$open_ports, $now, $ip]);
+        // Without subnet_id, update only the first matching IP to avoid cross-subnet updates
+        $find = $db->prepare("SELECT id FROM ip_addresses WHERE ip = ? LIMIT 1");
+        $find->execute([$ip]);
+        $found = $find->fetch();
+        if ($found) {
+            $stmt = $db->prepare("UPDATE ip_addresses SET ports = ?, last_seen = ? WHERE id = ?");
+            $stmt->execute([$open_ports, $now, $found['id']]);
+        }
     }
     
     respond('success', 'Port scan complete', [
@@ -100,7 +106,7 @@ if ($action === 'scan_subnet') {
     // Port scan all IPs in the subnet (discovers hosts that block ICMP Ping like Cloudflare / Firewalls)
     $port_results = [];
     if (!empty($ip_range) && !empty($ports)) {
-        $port_results = scanPortsMultiple($ip_range, $ports);
+        $port_results = scanPortsMultiple($ip_range, $ports, 350);
     }
     
     $ip_stmt = $db->prepare("SELECT * FROM ip_addresses WHERE subnet_id = ?");
@@ -170,7 +176,8 @@ if ($action === 'scan_subnet') {
 if ($action === 'snmp_discover') {
     $subnet_id = (int)($_GET['subnet_id'] ?? 0);
     $router_ip = trim($_GET['router_ip'] ?? '');
-    $community = trim($_GET['community'] ?? 'public');
+    $community = preg_replace('/[^a-zA-Z0-9_\-@!#$%^&*()]/', '', trim($_GET['community'] ?? 'public'));
+    if (empty($community)) $community = 'public';
     
     if (!$subnet_id) respond('error', 'Invalid Subnet ID');
     if (empty($router_ip) || ip2long($router_ip) === false) respond('error', 'Invalid Router IP Address');
@@ -299,9 +306,13 @@ if ($action === 'get_next_free_ip') {
 
 if ($action === 'get_my_ip_info') {
     $ip = $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
+    // Handle IPv6-mapped IPv4 addresses (e.g. ::ffff:192.168.1.1)
+    if (strpos($ip, '::ffff:') === 0) {
+        $ip = substr($ip, 7);
+    }
     respond('success', '', [
-        'ip' => $ip,
-        'hostname' => gethostbyaddr($ip)
+        'ip'       => $ip,
+        'hostname' => @gethostbyaddr($ip)
     ]);
 }
 
@@ -311,14 +322,16 @@ if ($action === 'search') {
         respond('success', '', ['subnets' => [], 'ips' => []]);
     }
     
-    $like = "%$q%";
+    // Escape LIKE wildcard characters to prevent search manipulation
+    $escaped_q = str_replace(['%', '_'], ['\%', '\_'], $q);
+    $like = "%$escaped_q%";
     
     $sub_stmt = $db->prepare("
         SELECT DISTINCT subnets.* 
         FROM subnets 
         LEFT JOIN subnet_tags ON subnets.id = subnet_tags.subnet_id
         LEFT JOIN tags ON subnet_tags.tag_id = tags.id OR subnets.tag_id = tags.id
-        WHERE subnets.name LIKE ? OR subnets.description LIKE ? OR subnets.subnet LIKE ? OR subnets.vrf LIKE ? OR tags.name LIKE ?
+        WHERE subnets.name LIKE ? ESCAPE '\\' OR subnets.description LIKE ? ESCAPE '\\' OR subnets.subnet LIKE ? ESCAPE '\\' OR subnets.vrf LIKE ? ESCAPE '\\' OR tags.name LIKE ? ESCAPE '\\'
     ");
     $sub_stmt->execute([$like, $like, $like, $like, $like]);
     $subnets = $sub_stmt->fetchAll();
@@ -343,7 +356,7 @@ if ($action === 'search') {
         SELECT ip_addresses.*, subnets.name as subnet_name, subnets.subnet as subnet_ip, subnets.mask as subnet_mask
         FROM ip_addresses 
         JOIN subnets ON ip_addresses.subnet_id = subnets.id 
-        WHERE ip_addresses.ip LIKE ? OR ip_addresses.hostname LIKE ? OR ip_addresses.description LIKE ? OR ip_addresses.mac LIKE ?
+        WHERE ip_addresses.ip LIKE ? ESCAPE '\\' OR ip_addresses.hostname LIKE ? ESCAPE '\\' OR ip_addresses.description LIKE ? ESCAPE '\\' OR ip_addresses.mac LIKE ? ESCAPE '\\'
     ");
     $ip_stmt->execute([$like, $like, $like, $like]);
     $ips = $ip_stmt->fetchAll();

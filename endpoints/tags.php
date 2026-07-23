@@ -87,7 +87,8 @@ if ($action === 'delete_tag') {
     $id = (int)($input['id'] ?? 0);
     if (!$id) respond('error', 'Invalid ID');
     
-    $stmt = $db->prepare("DELETE FROM tags WHERE id = ?");
-    $stmt->execute([$id]);
+    $db->prepare("DELETE FROM subnet_tags WHERE tag_id = ?")->execute([$id]);
+    $db->prepare("UPDATE subnets SET tag_id = NULL WHERE tag_id = ?")->execute([$id]);
+    $db->prepare("DELETE FROM tags WHERE id = ?")->execute([$id]);
     respond('success', 'Tag deleted successfully');
 }

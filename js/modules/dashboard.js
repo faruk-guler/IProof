@@ -17,6 +17,8 @@ export async function deleteSubnet(id) {
             loadSubnetsSidebar();
             if (state.currentView === 'dashboard') {
                 renderDashboard();
+            } else if (state.currentView === 'external-ips') {
+                loadView('external-ips');
             } else if (state.currentView === 'subnet' && state.activeSubnetId == id) {
                 loadView('dashboard');
             }

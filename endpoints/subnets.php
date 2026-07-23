@@ -1,14 +1,16 @@
 <?php
 if (!function_exists('is_subnet_descendant')) {
-    function is_subnet_descendant($db, $child_id, $parent_id) {
+    function is_subnet_descendant($db, $child_id, $parent_id, $max_depth = 50) {
         if (!$child_id || !$parent_id) return false;
         $curr = $child_id;
-        while ($curr !== null) {
+        $depth = 0;
+        while ($curr !== null && $depth < $max_depth) {
             if ((int)$curr === (int)$parent_id) return true;
             $stmt = $db->prepare("SELECT parent_id FROM subnets WHERE id = ?");
             $stmt->execute([$curr]);
             $row = $stmt->fetch();
             $curr = $row && $row['parent_id'] !== null ? (int)$row['parent_id'] : null;
+            $depth++;
         }
         return false;
     }
@@ -97,6 +99,19 @@ if ($action === 'add_subnet') {
         $db->prepare("INSERT OR IGNORE INTO subnet_tags (subnet_id, tag_id) VALUES (?, ?)")->execute([$new_subnet_id, $tag_id]);
     }
     
+    // Automatically reparent existing subnets that are strictly inside this new subnet
+    // They must share the same parent_id (or NULL if this subnet is root) and have a larger mask.
+    $check_reparent = $db->prepare("SELECT id, subnet, mask FROM subnets WHERE id != ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))");
+    $check_reparent->execute([$new_subnet_id, $parent_id, $parent_id]);
+    $potential_children = $check_reparent->fetchAll();
+    
+    $update_parent = $db->prepare("UPDATE subnets SET parent_id = ? WHERE id = ?");
+    foreach ($potential_children as $pc) {
+        if ($pc['mask'] > $mask && cidr_overlap($subnet, $mask, $pc['subnet'], $pc['mask'])) {
+            $update_parent->execute([$new_subnet_id, $pc['id']]);
+        }
+    }
+    
     respond('success', 'Subnet added successfully');
 }
 
@@ -123,7 +138,8 @@ if ($action === 'edit_subnet') {
     
     if ($parent_id) {
         $current_parent = $parent_id;
-        while ($current_parent !== null) {
+        $loop_count = 0;
+        while ($current_parent !== null && $loop_count < 100) {
             if ((int)$current_parent === $id) {
                 respond('error', 'Cyclic inheritance detected: Setting this parent would create an infinite loop.');
             }
@@ -131,6 +147,7 @@ if ($action === 'edit_subnet') {
             $p_stmt->execute([$current_parent]);
             $p_row = $p_stmt->fetch();
             $current_parent = $p_row && $p_row['parent_id'] !== null ? (int)$p_row['parent_id'] : null;
+            $loop_count++;
         }
 
         $parent = $db->prepare("SELECT subnet, mask FROM subnets WHERE id = ?");
@@ -193,6 +210,18 @@ if ($action === 'edit_subnet') {
         $db->prepare("INSERT OR IGNORE INTO subnet_tags (subnet_id, tag_id) VALUES (?, ?)")->execute([$id, $tag_id]);
     }
     
+    // Automatically reparent subnets that now belong under the edited subnet
+    $check_reparent = $db->prepare("SELECT id, subnet, mask FROM subnets WHERE id != ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))");
+    $check_reparent->execute([$id, $parent_id, $parent_id]);
+    $potential_children = $check_reparent->fetchAll();
+    
+    $update_parent = $db->prepare("UPDATE subnets SET parent_id = ? WHERE id = ?");
+    foreach ($potential_children as $pc) {
+        if ($pc['mask'] > $mask && cidr_overlap($subnet, $mask, $pc['subnet'], $pc['mask'])) {
+            $update_parent->execute([$id, $pc['id']]);
+        }
+    }
+    
     respond('success', 'Subnet updated successfully');
 }
 
@@ -205,6 +234,14 @@ if ($action === 'delete_subnet') {
     }
     
     $stmt = $db->prepare("DELETE FROM ip_addresses WHERE subnet_id = ?");
+    $stmt->execute([$id]);
+    
+    // Clean up subnet_tags junction table
+    $stmt = $db->prepare("DELETE FROM subnet_tags WHERE subnet_id = ?");
+    $stmt->execute([$id]);
+    
+    // Orphan child subnets: set their parent_id to NULL
+    $stmt = $db->prepare("UPDATE subnets SET parent_id = NULL WHERE parent_id = ?");
     $stmt->execute([$id]);
     
     $stmt = $db->prepare("DELETE FROM subnets WHERE id = ?");

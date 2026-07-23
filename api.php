@@ -52,9 +52,15 @@ $modifying_actions = [
     'add_subnet', 'edit_subnet', 'delete_subnet',
     'save_ip', 'delete_ip', 'scan_subnet', 'scan_ip_ports',
     'import_ips', 'snmp_discover', 'change_password',
-    'reset_db', 'save_settings', 'backup_db',
+    'reset_db', 'save_settings',
     'add_tag', 'edit_tag', 'delete_tag'
 ];
+
+// backup_db requires admin role but uses GET link (cannot send CSRF in POST body)
+if ($action === 'backup_db' && $_SESSION['user_role'] !== 'admin') {
+    http_response_code(403);
+    respond('error', 'Unauthorized action (Read-Only account)');
+}
 
 if (in_array($action, $modifying_actions)) {
     // Modify actions require Admin role
@@ -76,7 +82,7 @@ if (in_array($action, $modifying_actions)) {
         }
     }
     if (empty($client_token)) {
-        $client_token = $_GET['csrf_token'] ?? $_POST['csrf_token'] ?? $_POST['csrf_token'] ?? '';
+        $client_token = $_GET['csrf_token'] ?? $_POST['csrf_token'] ?? '';
     }
     $server_token = $_SESSION['csrf_token'] ?? '';
     if (empty($server_token) || !hash_equals($server_token, $client_token)) {

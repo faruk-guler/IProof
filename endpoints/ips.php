@@ -60,6 +60,10 @@ if ($action === 'save_ip') {
     $subnet_id = (int)($input['subnet_id'] ?? 0);
     $ip = trim($input['ip'] ?? '');
     $status = trim($input['status'] ?? 'active');
+    $allowed_statuses = ['active', 'offline', 'reserved'];
+    if (!in_array($status, $allowed_statuses)) {
+        $status = 'active';
+    }
     $hostname = trim($input['hostname'] ?? '');
     $mac = strtoupper(trim($input['mac'] ?? ''));
     $description = trim($input['description'] ?? '');
@@ -142,8 +146,10 @@ if ($action === 'export_ips') {
     $ip_stmt->execute([$subnet_id]);
     $ips = $ip_stmt->fetchAll();
     
+    if (ob_get_level()) ob_end_clean();
+    $clean_subnet_name = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $subnet['subnet']);
     header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename=subnet_' . $subnet['subnet'] . '_' . $subnet['mask'] . '.csv');
+    header('Content-Disposition: attachment; filename="subnet_' . $clean_subnet_name . '_' . $subnet['mask'] . '.csv"');
     
     $output = fopen('php://output', 'w');
     fputs($output, "\xEF\xBB\xBF");
@@ -189,6 +195,12 @@ if ($action === 'import_ips') {
     if ($bom !== "\xEF\xBB\xBF") rewind($handle);
     
     $header = fgetcsv($handle, 1000, $delimiter);
+    if ($header && ip2long(trim($header[0])) !== false) {
+        // First row is actually a valid IP address (no header row). Rewind so it gets processed.
+        rewind($handle);
+        $bom = fread($handle, 3);
+        if ($bom !== "\xEF\xBB\xBF") rewind($handle);
+    }
     
     $check = $db->prepare("SELECT id FROM ip_addresses WHERE subnet_id = ? AND ip = ?");
     $insert = $db->prepare("INSERT INTO ip_addresses (subnet_id, ip, status, hostname, mac, description) VALUES (?, ?, ?, ?, ?, ?)");
@@ -206,7 +218,9 @@ if ($action === 'import_ips') {
             if (empty($row[0])) continue;
             
             $ip = trim($row[0]);
-            $status = trim($row[1] ?? 'active');
+            $status_raw = strtolower(trim($row[1] ?? 'active'));
+            $allowed_statuses = ['active', 'offline', 'reserved'];
+            $status = in_array($status_raw, $allowed_statuses) ? $status_raw : 'active';
             $hostname = trim($row[2] ?? '');
             $mac = strtoupper(trim($row[3] ?? ''));
             if (!empty($mac) && !preg_match('/^([0-9A-F]{2}[:-]){5}([0-9A-F]{2})$/', $mac)) $mac = '';

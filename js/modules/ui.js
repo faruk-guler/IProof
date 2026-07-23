@@ -44,6 +44,9 @@ export function showToast(message, type = 'success', duration = 4000) {
             dismissToast(toast);
         }, duration);
 
+        // Store timer reference for cleanup
+        toast._dismissTimer = timer;
+
         toast.addEventListener('mouseenter', () => {
             const progress = toast.querySelector('.toast-progress');
             if (progress) progress.style.animationPlayState = 'paused';
@@ -57,6 +60,11 @@ export function showToast(message, type = 'success', duration = 4000) {
 
 export function dismissToast(toast) {
     if (!toast || toast.classList.contains('toast-dismissing')) return;
+    // Clear auto-dismiss timer if it exists
+    if (toast._dismissTimer) {
+        clearTimeout(toast._dismissTimer);
+        toast._dismissTimer = null;
+    }
     toast.classList.add('toast-dismissing');
     toast.addEventListener('animationend', () => {
         if (toast.parentNode) {

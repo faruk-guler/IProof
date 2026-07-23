@@ -75,7 +75,8 @@ export function setupAuthListeners() {
                     data = JSON.parse(text);
                 } catch (parseErr) {
                     console.error('Login response was not valid JSON:', text);
-                    showToast('Server Error: Invalid response format', 'error');
+                    const cleanText = text.replace(/<[^>]*>/g, ' ').trim();
+                    showToast('Server Error: ' + (cleanText.substring(0, 100) || 'Invalid server response'), 'error');
                     return;
                 }
 

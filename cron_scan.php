@@ -15,6 +15,14 @@ if (!$lockHandle || !flock($lockHandle, LOCK_EX | LOCK_NB)) {
     die("[" . date('Y-m-d H:i:s') . "] Another scan instance is already running. Exiting.\n");
 }
 
+// Ensure lock is always released, even on early exit() or fatal error
+register_shutdown_function(function() use (&$lockHandle) {
+    if (isset($lockHandle) && is_resource($lockHandle)) {
+        flock($lockHandle, LOCK_UN);
+        fclose($lockHandle);
+    }
+});
+
 $start_time = microtime(true);
 echo "[" . date('Y-m-d H:i:s') . "] Starting automated subnet scan...\n";
 
@@ -104,7 +112,7 @@ try {
         
         $port_results = [];
         if (!empty($ips) && !empty($ports)) {
-            $port_results = scanPortsMultiple($ips, $ports);
+            $port_results = scanPortsMultiple($ips, $ports, 350);
         }
         
         $db->beginTransaction();
@@ -126,6 +134,14 @@ try {
                 $new_status = $online ? 'active' : 'offline';
 
                 if ($row) {
+                    // Preserve reserved status - don't change it during cron scan
+                    if ($row['status'] === 'reserved') {
+                        if ($online) {
+                            // Only update last_seen and ports for reserved IPs
+                            $stmt_update->execute(['reserved', $now, $open_ports, $row['id']]);
+                        }
+                        continue;
+                    }
                     // Update existing IP record
                     $last_seen_val = $online ? $now : ($row['last_seen'] ?? null);
                     $stmt_update->execute([$new_status, $last_seen_val, $open_ports, $row['id']]);
@@ -148,7 +164,7 @@ try {
             $db->commit();
             echo "[" . date('Y-m-d H:i:s') . "] Subnet scan completed. Updated: {$updated_count}, Discovered: {$discovered_count}.\n";
         } catch (Exception $e) {
-            $db->rollBack();
+            if ($db->inTransaction()) $db->rollBack();
             echo "[" . date('Y-m-d H:i:s') . "] Database transaction error in subnet {$subnet['subnet']}: " . $e->getMessage() . "\n";
         }
     }
@@ -166,7 +182,9 @@ $end_time = microtime(true);
 $duration = round($end_time - $start_time, 2);
 echo "[" . date('Y-m-d H:i:s') . "] Automated scan finished in {$duration} seconds.\n";
 
-if (isset($lockHandle)) {
+// Release lock on normal exit (shutdown function serves as safety net for crashes/early exits)
+if (is_resource($lockHandle)) {
     flock($lockHandle, LOCK_UN);
     fclose($lockHandle);
+    $lockHandle = null;
 }

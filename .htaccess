@@ -2,3 +2,18 @@
     Order Allow,Deny
     Deny from all
 </Files>
+
+<Files "cron_scan.lock">
+    Order Allow,Deny
+    Deny from all
+</Files>
+
+# Block direct access to internal PHP includes
+<FilesMatch "^(db|ping)\.php$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+RewriteEngine On
+RewriteRule ^functions/ - [F,L]
+RewriteRule ^endpoints/ - [F,L]

@@ -8,7 +8,10 @@ export async function releaseIp(ip) {
     try {
         const res = await fetch('api.php?action=delete_ip', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': state.csrfToken
+            },
             body: JSON.stringify({ id: ip.id, subnet_id: ip.subnet_id, ip: ip.ip })
         });
         const data = await res.json();
@@ -133,7 +136,9 @@ export function renderIpsList() {
                 scanPortsBtn.disabled = true;
                 scanPortsBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
                 try {
-                    const res = await fetch(`api.php?action=scan_ip_ports&ip=${encodeURIComponent(ip.ip)}`);
+                    const res = await fetch(`api.php?action=scan_ip_ports&ip=${encodeURIComponent(ip.ip)}`, {
+                        headers: { 'X-CSRF-Token': state.csrfToken }
+                    });
                     const rData = await res.json();
                     if (rData.status === 'success') {
                         showToast(`Port scan complete for ${ip.ip}. Open ports: ${rData.open_ports.join(', ') || 'None'}`, 'success');
@@ -374,7 +379,9 @@ export async function renderSubnetDetail(id) {
                 scanBtn.innerHTML = '<i class="fa fa-sync fa-spin"></i> Scanning...';
 
                 try {
-                    const res = await fetch(`api.php?action=scan_subnet&subnet_id=${state.activeSubnet.id}`);
+                    const res = await fetch(`api.php?action=scan_subnet&subnet_id=${state.activeSubnet.id}`, {
+                        headers: { 'X-CSRF-Token': state.csrfToken }
+                    });
                     const scanData = await res.json();
                     if (scanData.status === 'success') {
                         showToast(`Scan finished! ${scanData.discovered} new devices discovered, ${scanData.updated} IP status updated.`, 'success');

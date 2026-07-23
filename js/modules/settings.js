@@ -27,6 +27,11 @@ export async function renderSettings() {
                                 </div>
                                 <div style="display:flex;flex-direction:column;gap:14px;padding:15px 0 0 0;">
                                     <div class="input-group">
+                                        <label class="input-label" for="settings-site-title">Site Title</label>
+                                        <input type="text" id="settings-site-title" class="form-input" value="${escapeHTML(settings.site_title || 'IProof')}" placeholder="IProof" maxlength="60">
+                                        <p style="font-size:0.8rem;color:var(--text-secondary);margin-top:4px;">Application name shown in the browser tab and header.</p>
+                                    </div>
+                                    <div class="input-group">
                                         <label class="input-label" for="settings-scan-interval">Auto-Scan Interval</label>
                                         <select id="settings-scan-interval" class="form-input">
                                             <option value="0" ${settings.scan_interval == 0 ? 'selected' : ''}>Disabled</option>
@@ -103,6 +108,7 @@ export async function renderSettings() {
             settingsForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const scan_interval = parseInt(document.getElementById('settings-scan-interval').value);
+                const site_title = document.getElementById('settings-site-title').value.trim() || 'IProof';
                 const ports_to_scan = document.getElementById('settings-ports-to-scan').value.trim().replace(/[^0-9,]/g, '');
                 const snmp_community = document.getElementById('settings-snmp-community').value.trim();
                 const snmp_version = document.getElementById('settings-snmp-version').value;
@@ -111,8 +117,11 @@ export async function renderSettings() {
                 try {
                     const sSaveRes = await fetch('api.php?action=save_settings', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ scan_interval, ports_to_scan, snmp_community, snmp_version, snmp_port })
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': state.csrfToken
+                        },
+                        body: JSON.stringify({ scan_interval, site_title, ports_to_scan, snmp_community, snmp_version, snmp_port })
                     });
                     const sSaveData = await sSaveRes.json();
                     if (sSaveData.status === 'success') {

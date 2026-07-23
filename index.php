@@ -142,22 +142,18 @@
                     </li>
                 </ul>
 
+                <div class="ct-nav-group-label" style="margin-top: 15px;">Internal Subnets</div>
+                <div id="sidebar-private-subnets-menu" style="display:flex;flex-direction:column;"></div>
+
                 <div class="ct-nav-group-label" style="margin-top: 15px;">Management</div>
+                <div id="sidebar-public-subnets-menu" style="display:flex;flex-direction:column;"></div>
                 <ul class="nav-menu">
-                    <li>
+                    <li style="margin-top: 10px;">
                         <a class="nav-link" data-view="tags">
                             <span>Tags</span>
                         </a>
                     </li>
                 </ul>
-
-                <!-- Nav Section: Internal Networks -->
-                <div class="ct-nav-group-label">Internal Networks</div>
-                <div id="sidebar-private-subnets-menu" style="display:flex;flex-direction:column;"></div>
-
-                <!-- Nav Section: External Networks -->
-                <div class="ct-nav-group-label" style="margin-top: 15px;">External Networks</div>
-                <div id="sidebar-public-subnets-menu" style="display:flex;flex-direction:column;"></div>
 
                 <div class="sidebar-footer" style="display:flex;flex-direction:column;gap:5px;">
                     <a class="nav-link" data-view="settings">

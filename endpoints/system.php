@@ -124,23 +124,28 @@ if ($action === 'get_system_info') {
 }
 
 if ($action === 'reset_db') {
-    $db->exec("DELETE FROM ip_addresses");
-    $db->exec("DELETE FROM subnets");
-    $db->exec("DELETE FROM tags");
-    $db->exec("VACUUM"); // Shrink DB file
-    
-    respond('success', 'Database reset successfully');
+    try {
+        $db->exec("DELETE FROM ip_addresses");
+        $db->exec("DELETE FROM subnet_tags");
+        $db->exec("DELETE FROM subnets");
+        $db->exec("DELETE FROM tags");
+        $db->exec("VACUUM"); // Shrink DB file
+        respond('success', 'Database reset successfully');
+    } catch (Exception $e) {
+        respond('error', 'Reset failed: ' . $e->getMessage());
+    }
 }
 
 if ($action === 'backup_db') {
     $file = __DIR__ . '/../db.sqlite';
     if (!file_exists($file)) respond('error', 'Database not found');
     
+    if (ob_get_level()) ob_end_clean();
     header('Content-Description: File Transfer');
-    header('Content-Type: application/octet-stream');
+    header('Content-Type: application/x-sqlite3');
     header('Content-Disposition: attachment; filename="iproof_backup_' . date('Y-m-d_H-i') . '.sqlite"');
     header('Expires: 0');
-    header('Cache-Control: must-revalidate');
+    header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
     header('Pragma: public');
     header('Content-Length: ' . filesize($file));
     readfile($file);

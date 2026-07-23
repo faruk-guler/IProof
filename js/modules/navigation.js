@@ -5,6 +5,7 @@ import { renderSubnetDetail } from './subnets.js';
 import { renderSettings } from './settings.js';
 import { renderAbout, renderTags } from './system.js';
 import { renderSearch } from './search.js';
+import { renderExternalIPs } from './external_ips.js';
 
 export async function loadView(view, params = {}) {
     state.currentView = view;
@@ -13,6 +14,8 @@ export async function loadView(view, params = {}) {
     try {
         if (view === 'dashboard') {
             await renderDashboard();
+        } else if (view === 'external-ips') {
+            await renderExternalIPs();
         } else if (view === 'subnet') {
             state.activeSubnetId = params.id;
             await renderSubnetDetail(params.id);
@@ -54,11 +57,11 @@ export async function loadSubnetsSidebar() {
             state.subnets = data.subnets;
             const privateMenu = document.getElementById('sidebar-private-subnets-menu');
             const publicMenu = document.getElementById('sidebar-public-subnets-menu');
-            if(!privateMenu || !publicMenu) return;
+            if (!privateMenu && !publicMenu) return;
             
-            privateMenu.innerHTML = '<ul class="nav-menu" id="private-subnets-tree-root"></ul>';
-            publicMenu.innerHTML = '<ul class="nav-menu" id="public-subnets-tree-root"></ul>';
-            
+            if (privateMenu) privateMenu.innerHTML = '<ul class="nav-menu" id="private-subnets-tree-root"></ul>';
+            if (publicMenu) publicMenu.innerHTML = '<ul class="nav-menu" id="public-subnets-tree-root"></ul>';
+
             const privateRoot = document.getElementById('private-subnets-tree-root');
             const publicRoot = document.getElementById('public-subnets-tree-root');
             
@@ -86,6 +89,7 @@ export async function loadSubnetsSidebar() {
             state.subnetsTree = [...privateTree, ...publicTree];
             
             function renderTree(nodeList, parentUl) {
+                if (!parentUl) return;
                 if (nodeList.length === 0) {
                     parentUl.innerHTML = '<li style="padding:6px 16px;color:var(--text-secondary);font-size:0.8rem;opacity:0.6;">No subnets</li>';
                     return;
@@ -148,8 +152,8 @@ export async function loadSubnetsSidebar() {
                 });
             }
             
-            renderTree(privateTree, privateRoot);
-            renderTree(publicTree, publicRoot);
+            if (privateRoot) renderTree(privateTree, privateRoot);
+            if (publicRoot) renderTree(publicTree, publicRoot);
         }
     } catch (err) {
         console.error(err);

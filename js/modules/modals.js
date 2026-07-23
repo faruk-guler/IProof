@@ -5,6 +5,8 @@ import { loadSubnetsSidebar, loadView } from './navigation.js';
 import { renderDashboard } from './dashboard.js';
 import { renderSubnetDetail } from './subnets.js';
 import { renderTags } from './system.js';
+import { renderExternalIPs } from './external_ips.js';
+import { renderSearch } from './search.js';
 
 export function openSubnetModal(subnetObj = null) {
     const isEdit = !!subnetObj;
@@ -124,7 +126,21 @@ export function openTagModal(tagObj = null) {
         } else {
             let html = '';
             state.subnets.forEach(s => {
-                const isChecked = isEdit && (s.tag_id == tagObj.id || (tagObj.name && s.tag_name === tagObj.name));
+                let isChecked = false;
+                if (isEdit) {
+                    // Check many-to-many relation via all_tags array
+                    if (s.all_tags && Array.isArray(s.all_tags)) {
+                        isChecked = s.all_tags.some(t => t.id == tagObj.id);
+                    }
+                    // Fallback: check legacy single tag_id
+                    if (!isChecked) {
+                        isChecked = s.tag_id == tagObj.id;
+                    }
+                    // Fallback: check subnets array from tag data
+                    if (!isChecked && tagObj.subnets && Array.isArray(tagObj.subnets)) {
+                        isChecked = tagObj.subnets.some(ts => ts.id == s.id);
+                    }
+                }
                 html += `
                     <label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:0.85rem;cursor:pointer;color:var(--text-primary);border-bottom:1px solid var(--border-color);">
                         <input type="checkbox" class="tag-subnet-checkbox" value="${s.id}" ${isChecked ? 'checked' : ''}>
@@ -226,7 +242,10 @@ export function setupModals() {
             try {
                 const res = await fetch(`api.php?action=${action}`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': state.csrfToken
+                    },
                     body: JSON.stringify(payload)
                 });
                 const data = await res.json();
@@ -235,6 +254,11 @@ export function setupModals() {
                     closeModal(dom.tagModal);
                     renderTags();
                     loadSubnetsSidebar();
+                    if (state.currentView === 'external-ips') {
+                        renderExternalIPs();
+                    } else if (state.currentView === 'dashboard') {
+                        renderDashboard();
+                    }
                 } else {
                     showToast(data.message, 'error');
                 }
@@ -262,7 +286,10 @@ export function setupModals() {
             try {
                 const res = await fetch(`api.php?action=${action}`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': state.csrfToken
+                    },
                     body: JSON.stringify(payload)
                 });
                 const data = await res.json();
@@ -272,8 +299,12 @@ export function setupModals() {
                     loadSubnetsSidebar();
                     if (state.currentView === 'dashboard') {
                         renderDashboard();
+                    } else if (state.currentView === 'external-ips') {
+                        renderExternalIPs();
                     } else if (state.currentView === 'subnet' && state.activeSubnetId == payload.id) {
                         renderSubnetDetail(payload.id);
+                    } else if (state.currentView === 'search' && dom.searchInput) {
+                        renderSearch(dom.searchInput.value.trim());
                     }
                 } else {
                     showToast(data.message, 'error');
@@ -311,14 +342,25 @@ export function setupModals() {
             try {
                 const res = await fetch('api.php?action=save_ip', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': state.csrfToken
+                    },
                     body: JSON.stringify(payload)
                 });
                 const data = await res.json();
                 if (data.status === 'success') {
                     showToast(data.message, 'success');
                     closeModal(dom.ipModal);
-                    if (state.currentView === 'subnet') renderSubnetDetail(subnet_id);
+                    if (state.currentView === 'subnet') {
+                        renderSubnetDetail(subnet_id);
+                    } else if (state.currentView === 'external-ips') {
+                        renderExternalIPs();
+                    } else if (state.currentView === 'dashboard') {
+                        renderDashboard();
+                    } else if (state.currentView === 'search' && dom.searchInput) {
+                        renderSearch(dom.searchInput.value.trim());
+                    }
                 } else {
                     showToast(data.message, 'error');
                 }
@@ -337,6 +379,7 @@ export function setupModals() {
             try {
                 const res = await fetch(`api.php?action=import_ips&subnet_id=${subnetId}`, {
                     method: 'POST',
+                    headers: { 'X-CSRF-Token': state.csrfToken },
                     body: formData
                 });
                 const data = await res.json();
@@ -367,7 +410,9 @@ export function setupModals() {
             btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Discovering...';
             
             try {
-                const res = await fetch(`api.php?action=snmp_discover&subnet_id=${subnetId}&router_ip=${routerIp}&community=${community}`);
+                const res = await fetch(`api.php?action=snmp_discover&subnet_id=${encodeURIComponent(subnetId)}&router_ip=${encodeURIComponent(routerIp)}&community=${encodeURIComponent(community)}`, {
+                    headers: { 'X-CSRF-Token': state.csrfToken }
+                });
                 const data = await res.json();
                 if (data.status === 'success') {
                     showToast(data.message, 'success');

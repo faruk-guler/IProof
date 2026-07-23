@@ -7,13 +7,13 @@ function pingHost($ip) {
     if (stristr(PHP_OS, 'WIN')) {
         // Windows: -n 1 (1 packet), -w 500 (500ms timeout)
         exec("ping -n 1 -w 500 " . escapeshellarg($ip), $output, $status);
-        if ($status !== 0) return false;
         $outStr = implode(' ', $output);
         return (stripos($outStr, 'ttl=') !== false);
     } else {
         // Linux/macOS: -c 1 (1 packet), -W 1 (1s timeout)
         exec("ping -c 1 -W 1 " . escapeshellarg($ip), $output, $status);
-        return $status === 0;
+        $outStr = implode(' ', $output);
+        return ($status === 0 || stripos($outStr, 'ttl=') !== false || stripos($outStr, 'bytes from') !== false);
     }
 }
 
@@ -90,16 +90,14 @@ function pingMultiple($ips, $batchSize = 32) {
             fclose($procData['pipes'][1]);
             fclose($procData['pipes'][2]);
 
-            if (!isset($exitCodes[$ip])) {
-                $status = proc_get_status($procData['proc']);
-                $exitCodes[$ip] = $status['exitcode'];
-            }
             proc_close($procData['proc']);
 
             if (stristr(PHP_OS, 'WIN')) {
-                $results[$ip] = ($exitCodes[$ip] === 0 && stripos($stdout, 'ttl=') !== false);
+                // On Windows, proc_get_status exitcode can be unreliable (-1), so rely on TTL presence
+                $results[$ip] = (stripos($stdout, 'ttl=') !== false);
             } else {
-                $results[$ip] = ($exitCodes[$ip] === 0);
+                $code = $exitCodes[$ip] ?? -1;
+                $results[$ip] = ($code === 0 || stripos($stdout, 'ttl=') !== false || stripos($stdout, 'bytes from') !== false);
             }
         }
     }
@@ -133,8 +131,8 @@ function getIpRange($subnet, $mask) {
     }
 
     // Guard against huge ranges (e.g. /16 or larger) to prevent memory crash
-    if (($end_ip - $start_ip) > 4096) {
-        $end_ip = $start_ip + 4096;
+    if (($end_ip - $start_ip) > 4095) {
+        $end_ip = $start_ip + 4095;
     }
 
     $ips = [];
@@ -148,7 +146,7 @@ function getIpRange($subnet, $mask) {
  * Scans multiple ports for a list of IPs in parallel using non-blocking stream_socket_client.
  * This is extremely fast because it uses asynchronous socket connections.
  */
-function scanPortsMultiple($ips, $ports, $timeout_ms = 100) {
+function scanPortsMultiple($ips, $ports, $timeout_ms = 350) {
     $results = [];
     $timeout_seconds = $timeout_ms / 1000.0;
     
@@ -193,28 +191,39 @@ function scanPortsMultiple($ips, $ports, $timeout_ms = 100) {
         }
         
         $start_wait = microtime(true);
-        while (count($sockets) > 0 && (microtime(true) - $start_wait) < ($timeout_seconds + 0.1)) {
+        while (count($sockets) > 0 && (microtime(true) - $start_wait) < ($timeout_seconds + 0.2)) {
             $read = null;
             $write = [];
-            $except = null;
+            $except = [];
             
             foreach ($sockets as $sData) {
                 $write[] = $sData['socket'];
+                $except[] = $sData['socket'];
             }
             
             // Check socket status
             $ready = @stream_select($read, $write, $except, 0, 20000);
-            if ($ready > 0 && is_array($write)) {
-                foreach ($write as $wSocket) {
-                    $id = (int)$wSocket;
-                    if (isset($sockets[$id])) {
-                        $sData = $sockets[$id];
-                        // If it is writable and doesn't have an error, it is open
-                        if (@stream_socket_get_name($sData['socket'], true)) {
-                            $results[$sData['ip']][] = $sData['port'];
+            if ($ready > 0) {
+                if (is_array($write)) {
+                    foreach ($write as $wSocket) {
+                        $id = (int)$wSocket;
+                        if (isset($sockets[$id])) {
+                            $sData = $sockets[$id];
+                            if (@stream_socket_get_name($sData['socket'], true)) {
+                                $results[$sData['ip']][] = $sData['port'];
+                            }
+                            @fclose($sData['socket']);
+                            unset($sockets[$id]);
                         }
-                        @fclose($sData['socket']);
-                        unset($sockets[$id]);
+                    }
+                }
+                if (is_array($except)) {
+                    foreach ($except as $eSocket) {
+                        $id = (int)$eSocket;
+                        if (isset($sockets[$id])) {
+                            @fclose($sockets[$id]['socket']);
+                            unset($sockets[$id]);
+                        }
                     }
                 }
             }
@@ -309,12 +318,17 @@ function getDeviceHostname($ip, $community = 'public') {
         }
     }
 
-    // 3. Try System Local Resolver (gethostbyaddr / local hosts)
+    // 3. System Local Resolver (gethostbyaddr)
+    // Disabled: gethostbyaddr() is synchronous and blocks for up to 4 seconds per IP if reverse DNS is missing.
+    // This causes subnet scans to exceed PHP's max_execution_time (30s).
+    // mDNS, NetBIOS, and SNMP are already covering 95% of hostname discovery without blocking.
+    /*
     $dns_host = @gethostbyaddr($ip);
     if (!empty($dns_host) && $dns_host !== $ip) {
         $clean = preg_replace('/\.(local|localdomain|lan|home|internal)$/i', '', $dns_host);
         return $clean;
     }
+    */
 
     // 4. Try SNMP sysName (.1.3.6.1.2.1.1.5.0)
     if (function_exists('snmp2_get') || function_exists('snmpget')) {
