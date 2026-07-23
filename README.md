@@ -40,9 +40,11 @@
 1. Copy all project files to your web server root directory (e.g., `htdocs` or `www`).
 2. Open your web browser and navigate to the application URL.
 3. **Default Credentials**:
+4. 
    - **Admin Password**: `admin`
    - **Read-Only Password**: `readonly`
-*(Please update the default passwords immediately from the Settings page.)*
+
+#### *(Please update the default passwords immediately from the Settings page.)*
 
 ---
 
