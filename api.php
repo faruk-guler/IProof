@@ -131,9 +131,10 @@ if (isset($routes[$action])) {
     try {
         require_once __DIR__ . '/endpoints/' . $routes[$action];
     } catch (Throwable $e) {
-        error_log("API Error [{$action}]: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine());
+        $loc = basename($e->getFile()) . ':' . $e->getLine();
+        error_log("API Error [{$action}]: " . $e->getMessage() . " in " . $loc);
         http_response_code(500);
-        respond('error', 'A system error occurred while processing the request. Check server logs.');
+        respond('error', 'System Error: ' . $e->getMessage() . ' (' . $loc . ')');
     }
 } else {
     respond('error', 'Invalid operation');

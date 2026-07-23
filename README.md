@@ -7,9 +7,11 @@
 ## 📸 Screenshots
 
 ### System Overview & Dashboard
+
 ![IProof Dashboard](github-img/iproof1.PNG)
 
 ### System Info & Database Diagnostics
+
 ![About IProof](github-img/iproof2.PNG)
 
 ---
@@ -32,19 +34,20 @@
 ## 🛠️ Installation & Requirements
 
 ### System Requirements
+
 - **Web Server**: Apache, Nginx, or IIS
 - **PHP**: PHP 7.4+ with `pdo_sqlite` and `sockets` extensions enabled
 - **Database**: SQLite3 (automatically initialized, no separate DB server setup required)
 
 ### Quick Start
+
 1. Copy all project files to your web server root directory (e.g., `htdocs` or `www`).
 2. Open your web browser and navigate to the application URL.
 3. **Default Credentials**:
-4. 
    - **Admin Password**: `admin`
    - **Read-Only Password**: `readonly`
 
-#### *(Please update the default passwords immediately from the Settings page.)*
+*(Please update the default passwords immediately from the Settings page.)*
 
 ---
 
