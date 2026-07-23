@@ -53,8 +53,8 @@
 To keep device statuses up-to-date automatically, add the following cron job entry:
 
 ```bash
-# Run host status scan every 5 minutes
-*/5 * * * * php /path/test/cron_scan.php >/dev/null 2>&1
+# Run host status scan every * minutes
+* * * * * php /path/to/cron_scan.php >/dev/null 2>&1
 ```
 
 ---
